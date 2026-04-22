@@ -257,7 +257,9 @@ let audioCtx = null;
 let humOscs = [];
 let humGains = [];
 let humFilters = [];
-const HARMONY_RATIOS = [1, 1.5, 2]; // root, perfect fifth, octave
+let masterReverb = null;
+let masterReverbGain = null;
+const HARMONY_RATIOS = [1, 1.189, 1.498, 2]; // root, major third, fifth, octave
 
 // UI Elements
 const uiHands = document.getElementById('ui-hands');
@@ -310,43 +312,50 @@ function initAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // Reverb impulse for natural guitar room sound
-        const convolver = audioCtx.createConvolver();
-        const reverbGain = audioCtx.createGain();
-        reverbGain.gain.value = 0.3;
-        const irLength = audioCtx.sampleRate * 1.2;
-        const irBuffer = audioCtx.createBuffer(2, irLength, audioCtx.sampleRate);
+        // Lush reverb shared by all voices
+        masterReverb = audioCtx.createConvolver();
+        masterReverbGain = audioCtx.createGain();
+        masterReverbGain.gain.value = 0.5;
+        const irLen = audioCtx.sampleRate * 3;
+        const irBuf = audioCtx.createBuffer(2, irLen, audioCtx.sampleRate);
         for (let ch = 0; ch < 2; ch++) {
-            const data = irBuffer.getChannelData(ch);
-            for (let i = 0; i < irLength; i++)
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLength, 3);
+            const d = irBuf.getChannelData(ch);
+            for (let i = 0; i < irLen; i++)
+                d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 1.5);
         }
-        convolver.buffer = irBuffer;
-        convolver.connect(reverbGain);
-        reverbGain.connect(audioCtx.destination);
+        masterReverb.buffer = irBuf;
+        masterReverb.connect(masterReverbGain);
+        masterReverbGain.connect(audioCtx.destination);
 
-        // 3-voice guitar-like strings: root, fifth, octave
+        // Chorus effect for warmth
+        const chorusDelay = audioCtx.createDelay();
+        chorusDelay.delayTime.value = 0.025;
+
+        // 4-voice ambient pad: root, major third, fifth, octave
         HARMONY_RATIOS.forEach((ratio, i) => {
-            const osc    = audioCtx.createOscillator();
+            const osc1   = audioCtx.createOscillator(); // sine layer
+            const osc2   = audioCtx.createOscillator(); // detuned sine for chorus
             const gain   = audioCtx.createGain();
-            // Lowpass filter mimics guitar body resonance — brighter on higher strings
             const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 1200 + i * 400;
-            filter.Q.value = 2;
 
-            // Sawtooth for rich harmonics like a plucked string
-            osc.type = 'sawtooth';
-            osc.frequency.value = 110 * ratio;
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+            filter.Q.value = 0.8;
+
+            osc1.type = 'sine';
+            osc2.type = 'sine';
+            osc1.frequency.value = 220 * ratio;
+            osc2.frequency.value = 220 * ratio * 1.003; // slight detune for chorus
             gain.gain.value = 0;
 
-            osc.connect(filter);
+            osc1.connect(filter);
+            osc2.connect(filter);
             filter.connect(gain);
             gain.connect(audioCtx.destination);
-            gain.connect(convolver);
-            osc.start();
+            gain.connect(masterReverb);
 
-            humOscs.push(osc);
+            osc1.start(); osc2.start();
+            humOscs.push([osc1, osc2]);
             humGains.push(gain);
             humFilters.push(filter);
         });
@@ -357,28 +366,35 @@ function initAudio() {
 
 function triggerZap() {
     if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    
-    // Zap sound profile
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
-    
-    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-    
-    osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.15);
+    // Soft bell/chime pluck — pleasant on finger tap
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 — major chord chime
+    notes.forEach((freq, i) => {
+        const osc  = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const t    = audioCtx.currentTime + i * 0.07; // slight stagger
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        // Gentle pitch drop like a bell
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.98, t + 1.2);
+
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.18, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+
+        osc.connect(gain);
+        if (masterReverb) gain.connect(masterReverb);
+        gain.connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + 1.5);
+    });
 }
 
 function updateHum(activeHands) {
     if (!audioCtx || !humGains.length) return;
     if (activeHands.length < 2) {
-        humGains.forEach(g => g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.3));
+        // Gentle fade out
+        humGains.forEach(g => g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5));
         return;
     }
 
@@ -387,19 +403,19 @@ function updateHum(activeHands) {
     const dist = Math.sqrt((p1.x-p2.x)**2 + (p1.y-p2.y)**2);
     const proximity = 1 - Math.min(dist, 1);
 
-    // Guitar strings: closer hands = higher fret = higher pitch
-    const rootFreq = 82 + proximity * 180; // E2 to ~D4 range
+    // Ambient pad: A2 root, rises gently as hands approach
+    const rootFreq = 110 + proximity * 110; // A2 to A3
 
     HARMONY_RATIOS.forEach((ratio, i) => {
         const freq   = rootFreq * ratio;
-        const maxVol = i === 0 ? 0.2 : i === 1 ? 0.13 : 0.08;
-        const vol    = 0.02 + proximity * maxVol;
-        // Open filter when hands close = brighter pluck
-        const cutoff = 600 + proximity * 2400;
+        const maxVol = [0.12, 0.09, 0.07, 0.05][i];
+        const vol    = 0.01 + proximity * maxVol;
+        // Filter opens up as hands get closer — airy and bright
+        const cutoff = 400 + proximity * 2000;
 
-        humOscs[i].frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.05);
-        humGains[i].gain.setTargetAtTime(vol, audioCtx.currentTime, 0.05);
-        humFilters[i].frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
+        humOscs[i].forEach(osc => osc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.1));
+        humGains[i].gain.setTargetAtTime(vol, audioCtx.currentTime, 0.1);
+        humFilters[i].frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.1);
     });
 }
 
