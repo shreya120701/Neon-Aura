@@ -460,7 +460,8 @@ function detectGestures() {
             triggerZap();
             window.open('https://www.google.com', '_blank');
         }
-        lastClickState[idx] = isPointing;
+        // Reset state when not pointing so next point gesture is always a fresh trigger
+        lastClickState[idx] = isPointing ? true : false;
     });
 
     // Spread Percentage roughly estimated by distance from Palm(0) to Index(8) and Pinky(20)
