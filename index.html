@@ -143,37 +143,7 @@
             text-shadow: 0 0 10px white;
         }
 
-        #humPresets {
-            position: absolute;
-            bottom: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            display: flex;
-            gap: 8px;
-            background: rgba(20,25,40,0.4);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 30px;
-            padding: 6px;
-            transition: opacity 0.5s;
-        }
-        .hum-btn {
-            background: transparent;
-            border: 1px solid transparent;
-            color: white;
-            padding: 6px 14px;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: 0.3s ease;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        .hum-btn.active {
-            background: rgba(255,255,255,0.15);
-            border-color: rgba(255,255,255,0.3);
-            text-shadow: 0 0 10px white;
-        }
+
 
         /* Start Overlay */
         #startOverlay {
@@ -243,12 +213,7 @@
         <button class="theme-btn" data-theme="Galaxy">Galaxy</button>
     </div>
 
-    <div id="humPresets" class="hidden">
-        <button class="hum-btn active" data-hum="crystal">🔮 Crystal</button>
-        <button class="hum-btn" data-hum="ocean">🌊 Ocean</button>
-        <button class="hum-btn" data-hum="forest">🌿 Forest</button>
-        <button class="hum-btn" data-hum="cosmos">✨ Cosmos</button>
-    </div>
+
 
 <script>
 /** 
@@ -390,19 +355,9 @@ document.getElementById('startBtn').addEventListener('click', () => {
     document.getElementById('startOverlay').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('themes').classList.remove('hidden');
-    document.getElementById('humPresets').classList.remove('hidden');
     initAudio();
     initMediaPipe();
     requestAnimationFrame(renderLoop);
-});
-
-document.querySelectorAll('.hum-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.hum-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentHumPreset = btn.getAttribute('data-hum');
-        if (audioCtx) buildHumVoices();
-    });
 });
 
 
