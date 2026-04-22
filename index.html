@@ -256,6 +256,7 @@ let maxColumns = 0;
 let audioCtx = null;
 let humOscs = [];
 let humGains = [];
+let humFilters = [];
 const HARMONY_RATIOS = [1, 1.5, 2]; // root, perfect fifth, octave
 
 // UI Elements
@@ -309,42 +310,46 @@ function initAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // Master reverb for warmth
+        // Reverb impulse for natural guitar room sound
         const convolver = audioCtx.createConvolver();
         const reverbGain = audioCtx.createGain();
-        reverbGain.gain.value = 0.4;
-
-        // Simple impulse reverb
-        const irLength = audioCtx.sampleRate * 1.5;
+        reverbGain.gain.value = 0.3;
+        const irLength = audioCtx.sampleRate * 1.2;
         const irBuffer = audioCtx.createBuffer(2, irLength, audioCtx.sampleRate);
         for (let ch = 0; ch < 2; ch++) {
             const data = irBuffer.getChannelData(ch);
-            for (let i = 0; i < irLength; i++) {
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLength, 2);
-            }
+            for (let i = 0; i < irLength; i++)
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLength, 3);
         }
         convolver.buffer = irBuffer;
+        convolver.connect(reverbGain);
+        reverbGain.connect(audioCtx.destination);
 
-        // 3-voice harmony: root, fifth, octave
+        // 3-voice guitar-like strings: root, fifth, octave
         HARMONY_RATIOS.forEach((ratio, i) => {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
+            const osc    = audioCtx.createOscillator();
+            const gain   = audioCtx.createGain();
+            // Lowpass filter mimics guitar body resonance — brighter on higher strings
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 1200 + i * 400;
+            filter.Q.value = 2;
 
-            osc.type = i === 0 ? 'sine' : 'triangle'; // root is sine, upper voices triangle
+            // Sawtooth for rich harmonics like a plucked string
+            osc.type = 'sawtooth';
             osc.frequency.value = 110 * ratio;
             gain.gain.value = 0;
 
-            osc.connect(gain);
+            osc.connect(filter);
+            filter.connect(gain);
             gain.connect(audioCtx.destination);
             gain.connect(convolver);
             osc.start();
 
             humOscs.push(osc);
             humGains.push(gain);
+            humFilters.push(filter);
         });
-
-        convolver.connect(reverbGain);
-        reverbGain.connect(audioCtx.destination);
     } catch(e) {
         console.error("Web Audio API failed", e);
     }
@@ -379,22 +384,22 @@ function updateHum(activeHands) {
 
     const p1 = activeHands[0][8];
     const p2 = activeHands[1][8];
-    const dx = p1.x - p2.x;
-    const dy = p1.y - p2.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-
-    // Closer hands = higher pitch, louder
+    const dist = Math.sqrt((p1.x-p2.x)**2 + (p1.y-p2.y)**2);
     const proximity = 1 - Math.min(dist, 1);
-    const rootFreq = 110 + proximity * 220; // 110Hz to 330Hz
+
+    // Guitar strings: closer hands = higher fret = higher pitch
+    const rootFreq = 82 + proximity * 180; // E2 to ~D4 range
 
     HARMONY_RATIOS.forEach((ratio, i) => {
-        const freq = rootFreq * ratio;
-        // Upper voices are quieter for a balanced chord
-        const maxVol = i === 0 ? 0.18 : i === 1 ? 0.12 : 0.07;
-        const targetVol = 0.03 + proximity * maxVol;
+        const freq   = rootFreq * ratio;
+        const maxVol = i === 0 ? 0.2 : i === 1 ? 0.13 : 0.08;
+        const vol    = 0.02 + proximity * maxVol;
+        // Open filter when hands close = brighter pluck
+        const cutoff = 600 + proximity * 2400;
 
-        humOscs[i].frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.08);
-        humGains[i].gain.setTargetAtTime(targetVol, audioCtx.currentTime, 0.08);
+        humOscs[i].frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.05);
+        humGains[i].gain.setTargetAtTime(vol, audioCtx.currentTime, 0.05);
+        humFilters[i].frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
     });
 }
 
