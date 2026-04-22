@@ -436,24 +436,31 @@ function detectGestures() {
         }
         lastPinchState[idx] = isPinching;
 
-        // Click Detection: index fingertip (8) close to palm (0)
-        // Triggers when finger is half-folded or fully hits the palm
-        const indexTip = hand[8];
-        const palm = hand[0];
-        const indexBase = hand[5];
-        const palmSize = getDist(palm, indexBase); // normalize by hand size
-        const tipToPalm = getDist(indexTip, palm);
-        const isClicking = tipToPalm < palmSize * 0.9; // within 90% of palm width = half fold or more
+        // Click Detection: only index finger extended, all others curled
+        const palmBase = hand[0];
+        const handSize = getDist(palmBase, hand[5]); // normalize by hand size
+
+        const isFingerExtended = (tipIdx, baseIdx) =>
+            getDist(hand[tipIdx], palmBase) > getDist(hand[baseIdx], palmBase);
+
+        const indexExtended = isFingerExtended(8, 5);
+        const middleCurled  = !isFingerExtended(12, 9);
+        const ringCurled    = !isFingerExtended(16, 13);
+        const pinkyCurled   = !isFingerExtended(20, 17);
+        // Thumb: compare tip (4) to knuckle (2) distance from palm
+        const thumbCurled   = getDist(hand[4], palmBase) < handSize * 1.8;
+
+        const isPointing = indexExtended && middleCurled && ringCurled && pinkyCurled && thumbCurled;
 
         const now = performance.now();
-        if (isClicking && !lastClickState[idx] && (now - lastClickTime) > 1500) {
+        if (isPointing && !lastClickState[idx] && (now - lastClickTime) > 1500) {
             lastClickTime = now;
-            uiGesture.innerText = "CLICK!";
-            createShockwave(mapToCanvas(indexTip), '#00ffcc');
+            uiGesture.innerText = "POINTING!";
+            createShockwave(mapToCanvas(hand[8]), '#00ffcc');
             triggerZap();
             window.open('https://www.google.com', '_blank');
         }
-        lastClickState[idx] = isClicking;
+        lastClickState[idx] = isPointing;
     });
 
     // Spread Percentage roughly estimated by distance from Palm(0) to Index(8) and Pinky(20)
