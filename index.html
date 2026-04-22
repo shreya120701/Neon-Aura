@@ -411,8 +411,7 @@ function mapToCanvas(point) {
 }
 
 let lastPinchState = [false, false]; // Prevents rapid re-triggering
-let lastClickState = [false, false]; // Prevents rapid re-triggering for click
-let lastClickTime = 0;              // Cooldown so it only fires once per gesture
+let pointingArmed = [true, true];   // Ready to fire when true (rearms after gesture released)
 
 function detectGestures() {
     if (!currentHands.length) return;
@@ -452,16 +451,17 @@ function detectGestures() {
 
         const isPointing = indexExtended && middleCurled && ringCurled && pinkyCurled && thumbCurled;
 
-        const now = performance.now();
-        if (isPointing && !lastClickState[idx] && (now - lastClickTime) > 1500) {
-            lastClickTime = now;
+        if (!isPointing) {
+            // Gesture released — rearm so next point fires
+            pointingArmed[idx] = true;
+        } else if (isPointing && pointingArmed[idx]) {
+            // Fresh point gesture detected
+            pointingArmed[idx] = false; // disarm until gesture is released
             uiGesture.innerText = "POINTING!";
             createShockwave(mapToCanvas(hand[8]), '#00ffcc');
             triggerZap();
             window.open('https://www.google.com', '_blank');
         }
-        // Reset state when not pointing so next point gesture is always a fresh trigger
-        lastClickState[idx] = isPointing ? true : false;
     });
 
     // Spread Percentage roughly estimated by distance from Palm(0) to Index(8) and Pinky(20)
