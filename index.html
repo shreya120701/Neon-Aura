@@ -143,6 +143,38 @@
             text-shadow: 0 0 10px white;
         }
 
+        #humPresets {
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 8px;
+            background: rgba(20,25,40,0.4);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 30px;
+            padding: 6px;
+            transition: opacity 0.5s;
+        }
+        .hum-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.3s ease;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .hum-btn.active {
+            background: rgba(255,255,255,0.15);
+            border-color: rgba(255,255,255,0.3);
+            text-shadow: 0 0 10px white;
+        }
+
         /* Start Overlay */
         #startOverlay {
             position: absolute;
@@ -211,6 +243,13 @@
         <button class="theme-btn" data-theme="Galaxy">Galaxy</button>
     </div>
 
+    <div id="humPresets" class="hidden">
+        <button class="hum-btn active" data-hum="crystal">🔮 Crystal</button>
+        <button class="hum-btn" data-hum="ocean">🌊 Ocean</button>
+        <button class="hum-btn" data-hum="forest">🌿 Forest</button>
+        <button class="hum-btn" data-hum="cosmos">✨ Cosmos</button>
+    </div>
+
 <script>
 /** 
  * GLOBALS & CONFIG
@@ -260,6 +299,58 @@ let humFilters = [];
 let masterReverb = null;
 let masterReverbGain = null;
 const HARMONY_RATIOS = [1, 1.189, 1.498, 2]; // root, major third, fifth, octave
+let currentHumPreset = 'crystal';
+
+const humPresets = {
+    crystal: {
+        name: 'Crystal Bells',
+        waveform: 'sine',
+        ratios: [1, 1.26, 1.5, 2],      // Pentatonic: C, E♭, G, C
+        baseFreq: 261.63,                // C4
+        freqRange: 130.81,               // up to C5
+        volumes: [0.08, 0.06, 0.05, 0.03],
+        filterBase: 2000,
+        filterRange: 1000,
+        attack: 0.5,
+        release: 1.0
+    },
+    ocean: {
+        name: 'Ocean Waves',
+        waveform: 'sine',
+        ratios: [1, 1.125, 1.5, 1.875],  // Sus4 spread: C, F, G, B♭
+        baseFreq: 110,                   // A2
+        freqRange: 55,                   // up to E3
+        volumes: [0.12, 0.09, 0.07, 0.04],
+        filterBase: 800,
+        filterRange: 400,
+        attack: 0.8,
+        release: 1.2
+    },
+    forest: {
+        name: 'Forest Whisper',
+        waveform: 'triangle',
+        ratios: [1, 1.2, 1.5, 1.8],      // Major 6th chord
+        baseFreq: 146.83,                // D3
+        freqRange: 73.42,                // up to D4
+        volumes: [0.07, 0.06, 0.05, 0.04],
+        filterBase: 1200,
+        filterRange: 800,
+        attack: 0.6,
+        release: 0.9
+    },
+    cosmos: {
+        name: 'Cosmic Drift',
+        waveform: 'sine',
+        ratios: [1, 1.414, 1.682, 2.236], // Fibonacci harmonics
+        baseFreq: 174.61,                 // F3
+        freqRange: 87.31,                 // up to F4
+        volumes: [0.09, 0.07, 0.05, 0.03],
+        filterBase: 1500,
+        filterRange: 1200,
+        attack: 0.7,
+        release: 1.5
+    }
+};
 
 // UI Elements
 const uiHands = document.getElementById('ui-hands');
@@ -299,66 +390,86 @@ document.getElementById('startBtn').addEventListener('click', () => {
     document.getElementById('startOverlay').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('themes').classList.remove('hidden');
+    document.getElementById('humPresets').classList.remove('hidden');
     initAudio();
     initMediaPipe();
     requestAnimationFrame(renderLoop);
+});
+
+document.querySelectorAll('.hum-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.hum-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentHumPreset = btn.getAttribute('data-hum');
+        if (audioCtx) buildHumVoices();
+    });
 });
 
 
 /**
  * AUDIO ENGINE
  */
+function buildReverb() {
+    const irLen = audioCtx.sampleRate * 4;
+    const irBuf = audioCtx.createBuffer(2, irLen, audioCtx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const d = irBuf.getChannelData(ch);
+        for (let i = 0; i < irLen; i++)
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 1.2);
+    }
+    return irBuf;
+}
+
 function initAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // Long lush reverb
         masterReverb = audioCtx.createConvolver();
         masterReverbGain = audioCtx.createGain();
-        masterReverbGain.gain.value = 0.6;
-        const irLen = audioCtx.sampleRate * 4;
-        const irBuf = audioCtx.createBuffer(2, irLen, audioCtx.sampleRate);
-        for (let ch = 0; ch < 2; ch++) {
-            const d = irBuf.getChannelData(ch);
-            for (let i = 0; i < irLen; i++)
-                d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 1.2);
-        }
-        masterReverb.buffer = irBuf;
+        masterReverbGain.gain.value = 0.55;
+        masterReverb.buffer = buildReverb();
         masterReverb.connect(masterReverbGain);
         masterReverbGain.connect(audioCtx.destination);
 
-        // 4 pure sine voices — soft pentatonic pad (C, E, G, B)
-        // Pure sines have zero harsh harmonics — always sounds gentle
-        HARMONY_RATIOS.forEach((ratio, i) => {
-            const osc1 = audioCtx.createOscillator();
-            const osc2 = audioCtx.createOscillator(); // micro-detuned twin
-            const gain = audioCtx.createGain();
-            const filter = audioCtx.createBiquadFilter();
-
-            filter.type = 'lowpass';
-            filter.frequency.value = 1800;
-            filter.Q.value = 0.5; // very gentle, no resonance peak
-
-            osc1.type = 'sine';
-            osc2.type = 'sine';
-            osc1.frequency.value = 220 * ratio;
-            osc2.frequency.value = 220 * ratio * 1.002; // barely detuned for warmth
-            gain.gain.value = 0;
-
-            osc1.connect(filter);
-            osc2.connect(filter);
-            filter.connect(gain);
-            gain.connect(audioCtx.destination);
-            gain.connect(masterReverb);
-
-            osc1.start(); osc2.start();
-            humOscs.push([osc1, osc2]);
-            humGains.push(gain);
-            humFilters.push(filter);
-        });
+        buildHumVoices();
     } catch(e) {
         console.error("Web Audio API failed", e);
     }
+}
+
+function buildHumVoices() {
+    // Stop and clear existing voices
+    humOscs.forEach(pair => pair.forEach(o => { try { o.stop(); } catch(e){} }));
+    humOscs = []; humGains = []; humFilters = [];
+
+    const preset = humPresets[currentHumPreset];
+
+    preset.ratios.forEach((ratio, i) => {
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        filter.type = 'lowpass';
+        filter.frequency.value = preset.filterBase;
+        filter.Q.value = 0.4;
+
+        osc1.type = preset.waveform;
+        osc2.type = preset.waveform;
+        osc1.frequency.value = preset.baseFreq * ratio;
+        osc2.frequency.value = preset.baseFreq * ratio * 1.002;
+        gain.gain.value = 0;
+
+        osc1.connect(filter); osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        gain.connect(masterReverb);
+
+        osc1.start(); osc2.start();
+        humOscs.push([osc1, osc2]);
+        humGains.push(gain);
+        humFilters.push(filter);
+    });
 }
 
 function triggerZap() {
@@ -389,9 +500,9 @@ function triggerZap() {
 
 function updateHum(activeHands) {
     if (!audioCtx || !humGains.length) return;
+    const preset = humPresets[currentHumPreset];
     if (activeHands.length < 2) {
-        // Slow gentle fade out — no abrupt cut
-        humGains.forEach(g => g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.8));
+        humGains.forEach(g => g.gain.setTargetAtTime(0, audioCtx.currentTime, preset.release));
         return;
     }
 
@@ -400,21 +511,16 @@ function updateHum(activeHands) {
     const dist = Math.sqrt((p1.x-p2.x)**2 + (p1.y-p2.y)**2);
     const proximity = 1 - Math.min(dist, 1);
 
-    // Gentle A2 root, soft rise — never goes too high or too loud
-    const rootFreq = 110 + proximity * 55; // A2 to E3, very calm range
+    const rootFreq = preset.baseFreq + proximity * preset.freqRange;
 
-    HARMONY_RATIOS.forEach((ratio, i) => {
+    preset.ratios.forEach((ratio, i) => {
         const freq   = rootFreq * ratio;
-        // Keep volumes low and balanced — upper voices much softer
-        const maxVol = [0.10, 0.07, 0.05, 0.03][i];
-        const vol    = proximity * maxVol;
+        const vol    = proximity * preset.volumes[i];
+        const cutoff = preset.filterBase + proximity * preset.filterRange;
 
-        // Slow glide — no sudden pitch jumps
-        humOscs[i].forEach(osc => osc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.3));
-        // Slow swell in/out
-        humGains[i].gain.setTargetAtTime(vol, audioCtx.currentTime, 0.4);
-        // Filter stays open and smooth — no harsh brightness changes
-        humFilters[i].frequency.setTargetAtTime(1200 + proximity * 600, audioCtx.currentTime, 0.4);
+        humOscs[i].forEach(osc => osc.frequency.setTargetAtTime(freq, audioCtx.currentTime, preset.attack));
+        humGains[i].gain.setTargetAtTime(vol, audioCtx.currentTime, preset.attack);
+        humFilters[i].frequency.setTargetAtTime(cutoff, audioCtx.currentTime, preset.attack);
     });
 }
 
