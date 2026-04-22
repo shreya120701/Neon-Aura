@@ -412,6 +412,7 @@ function mapToCanvas(point) {
 
 let lastPinchState = [false, false]; // Prevents rapid re-triggering
 let pointingArmed = [true, true];   // Ready to fire when true (rearms after gesture released)
+let ringArmed = [true, true];       // Same for ring finger gesture
 
 function detectGestures() {
     if (!currentHands.length) return;
@@ -452,15 +453,32 @@ function detectGestures() {
         const isPointing = indexExtended && middleCurled && ringCurled && pinkyCurled && thumbCurled;
 
         if (!isPointing) {
-            // Gesture released — rearm so next point fires
             pointingArmed[idx] = true;
         } else if (isPointing && pointingArmed[idx]) {
-            // Fresh point gesture detected
-            pointingArmed[idx] = false; // disarm until gesture is released
+            pointingArmed[idx] = false;
             uiGesture.innerText = "POINTING!";
             createShockwave(mapToCanvas(hand[8]), '#00ffcc');
             triggerZap();
             window.open('https://www.google.com', '_blank');
+        }
+
+        // Ring finger gesture: only ring finger extended, all others curled
+        const ringExtended   = isFingerExtended(16, 13);
+        const indexCurled2   = !isFingerExtended(8, 5);
+        const middleCurled2  = !isFingerExtended(12, 9);
+        const pinkyCurled2   = !isFingerExtended(20, 17);
+        const thumbCurled2   = getDist(hand[4], palmBase) < handSize * 1.8;
+
+        const isRingPoint = ringExtended && indexCurled2 && middleCurled2 && pinkyCurled2 && thumbCurled2;
+
+        if (!isRingPoint) {
+            ringArmed[idx] = true;
+        } else if (isRingPoint && ringArmed[idx]) {
+            ringArmed[idx] = false;
+            uiGesture.innerText = "RING!";
+            createShockwave(mapToCanvas(hand[16]), '#25D366');
+            triggerZap();
+            window.open('https://www.whatsapp.com', '_blank');
         }
     });
 
