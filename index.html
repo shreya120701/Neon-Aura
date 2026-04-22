@@ -434,15 +434,14 @@ function triggerZap() {
     notes.forEach((freq, i) => {
         const osc  = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        const t    = audioCtx.currentTime + i * 0.07; // slight stagger
+        const t    = audioCtx.currentTime + i * 0.07;
 
-        osc.type = 'sine';
+        osc.type = 'triangle'; // triangle — no harsh harmonics
         osc.frequency.setValueAtTime(freq, t);
-        // Gentle pitch drop like a bell
         osc.frequency.exponentialRampToValueAtTime(freq * 0.98, t + 1.2);
 
         gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.18, t + 0.01);
+        gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
 
         osc.connect(gain);
@@ -450,6 +449,43 @@ function triggerZap() {
         gain.connect(audioCtx.destination);
         osc.start(t);
         osc.stop(t + 1.5);
+    });
+}
+
+function triggerMandalaSound() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const notes = [261.63, 329.63, 392.00, 523.25]; // C major chord
+    notes.forEach((freq, i) => {
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        osc1.type = 'triangle';
+        osc2.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, now + i * 0.05);
+        osc2.frequency.setValueAtTime(freq * 1.01, now + i * 0.05); // slight detune for richness
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1500, now);
+        filter.Q.value = 0.6;
+
+        // Smooth envelope — no sharp attack
+        gain.gain.setValueAtTime(0.0001, now + i * 0.05);
+        gain.gain.linearRampToValueAtTime(0.1, now + i * 0.05 + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.05 + 1.5);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        if (masterReverb) gain.connect(masterReverb);
+        gain.connect(audioCtx.destination);
+
+        osc1.start(now + i * 0.05);
+        osc2.start(now + i * 0.05);
+        osc1.stop(now + i * 0.05 + 1.6);
+        osc2.stop(now + i * 0.05 + 1.6);
     });
 }
 
@@ -492,6 +528,7 @@ function mapToCanvas(point) {
 }
 
 let lastPinchState = [false, false]; // Prevents rapid re-triggering
+let lastMandalaSoundTime = 0;
 let pointingArmed = [true, true];   // Ready to fire when true (rearms after gesture released)
 let ringArmed = [true, true];       // Same for fist gesture
 let twoFingerArmed = [true, true];  // Index + middle up = open heart page
@@ -837,6 +874,13 @@ function renderLoop(timestamp) {
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 ctx.restore();
+
+                // Trigger pleasant mandala sound every 1.2s while 2 hands active
+                const nowMs = performance.now();
+                if (nowMs - lastMandalaSoundTime > 1200) {
+                    triggerMandalaSound();
+                    lastMandalaSoundTime = nowMs;
+                }
             }
         }
         
