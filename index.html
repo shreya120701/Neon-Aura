@@ -662,32 +662,10 @@ function createShockwave(pos, color) {
 
 // Background Effect Engine
 function drawBackground() {
-    // Use destination-out to fade out the previous frame's drops, leaving a transparent trail
     bgCtx.globalCompositeOperation = 'destination-out';
     bgCtx.fillStyle = `rgba(0, 0, 0, ${0.15 + Math.min(handVelocities*10, 0.5)})`;
     bgCtx.fillRect(0, 0, width, height);
     bgCtx.globalCompositeOperation = 'source-over';
-
-    // Matrix Rain Effect mapping to hand speed
-    bgCtx.fillStyle = themes[currentTheme](time, 1, 1);
-    bgCtx.font = fontSize + "px monospace";
-    
-    // Matrix speed boosts when hands move fast
-    let speedMult = 1 + (handVelocities * 100);
-
-    for (let i = 0; i < matrixColumns.length; i++) {
-        // Only draw randomly to keep it sparse like stars/rain
-        if (Math.random() > 0.95) {
-            const char = String.fromCharCode(0x30A0 + Math.random() * 96);
-            bgCtx.fillText(char, i * fontSize, matrixColumns[i] * fontSize);
-        }
-        
-        matrixColumns[i] += Math.random() * speedMult;
-        
-        if (matrixColumns[i] * fontSize > height && Math.random() > 0.9) {
-            matrixColumns[i] = 0;
-        }
-    }
 }
 
 function updatePhysics() {
