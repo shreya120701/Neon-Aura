@@ -312,40 +312,37 @@ function initAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // Lush reverb shared by all voices
+        // Long lush reverb
         masterReverb = audioCtx.createConvolver();
         masterReverbGain = audioCtx.createGain();
-        masterReverbGain.gain.value = 0.5;
-        const irLen = audioCtx.sampleRate * 3;
+        masterReverbGain.gain.value = 0.6;
+        const irLen = audioCtx.sampleRate * 4;
         const irBuf = audioCtx.createBuffer(2, irLen, audioCtx.sampleRate);
         for (let ch = 0; ch < 2; ch++) {
             const d = irBuf.getChannelData(ch);
             for (let i = 0; i < irLen; i++)
-                d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 1.5);
+                d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 1.2);
         }
         masterReverb.buffer = irBuf;
         masterReverb.connect(masterReverbGain);
         masterReverbGain.connect(audioCtx.destination);
 
-        // Chorus effect for warmth
-        const chorusDelay = audioCtx.createDelay();
-        chorusDelay.delayTime.value = 0.025;
-
-        // 4-voice ambient pad: root, major third, fifth, octave
+        // 4 pure sine voices — soft pentatonic pad (C, E, G, B)
+        // Pure sines have zero harsh harmonics — always sounds gentle
         HARMONY_RATIOS.forEach((ratio, i) => {
-            const osc1   = audioCtx.createOscillator(); // sine layer
-            const osc2   = audioCtx.createOscillator(); // detuned sine for chorus
-            const gain   = audioCtx.createGain();
+            const osc1 = audioCtx.createOscillator();
+            const osc2 = audioCtx.createOscillator(); // micro-detuned twin
+            const gain = audioCtx.createGain();
             const filter = audioCtx.createBiquadFilter();
 
             filter.type = 'lowpass';
-            filter.frequency.value = 800;
-            filter.Q.value = 0.8;
+            filter.frequency.value = 1800;
+            filter.Q.value = 0.5; // very gentle, no resonance peak
 
             osc1.type = 'sine';
             osc2.type = 'sine';
             osc1.frequency.value = 220 * ratio;
-            osc2.frequency.value = 220 * ratio * 1.003; // slight detune for chorus
+            osc2.frequency.value = 220 * ratio * 1.002; // barely detuned for warmth
             gain.gain.value = 0;
 
             osc1.connect(filter);
@@ -393,8 +390,8 @@ function triggerZap() {
 function updateHum(activeHands) {
     if (!audioCtx || !humGains.length) return;
     if (activeHands.length < 2) {
-        // Gentle fade out
-        humGains.forEach(g => g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5));
+        // Slow gentle fade out — no abrupt cut
+        humGains.forEach(g => g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.8));
         return;
     }
 
@@ -403,19 +400,21 @@ function updateHum(activeHands) {
     const dist = Math.sqrt((p1.x-p2.x)**2 + (p1.y-p2.y)**2);
     const proximity = 1 - Math.min(dist, 1);
 
-    // Ambient pad: A2 root, rises gently as hands approach
-    const rootFreq = 110 + proximity * 110; // A2 to A3
+    // Gentle A2 root, soft rise — never goes too high or too loud
+    const rootFreq = 110 + proximity * 55; // A2 to E3, very calm range
 
     HARMONY_RATIOS.forEach((ratio, i) => {
         const freq   = rootFreq * ratio;
-        const maxVol = [0.12, 0.09, 0.07, 0.05][i];
-        const vol    = 0.01 + proximity * maxVol;
-        // Filter opens up as hands get closer — airy and bright
-        const cutoff = 400 + proximity * 2000;
+        // Keep volumes low and balanced — upper voices much softer
+        const maxVol = [0.10, 0.07, 0.05, 0.03][i];
+        const vol    = proximity * maxVol;
 
-        humOscs[i].forEach(osc => osc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.1));
-        humGains[i].gain.setTargetAtTime(vol, audioCtx.currentTime, 0.1);
-        humFilters[i].frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.1);
+        // Slow glide — no sudden pitch jumps
+        humOscs[i].forEach(osc => osc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.3));
+        // Slow swell in/out
+        humGains[i].gain.setTargetAtTime(vol, audioCtx.currentTime, 0.4);
+        // Filter stays open and smooth — no harsh brightness changes
+        humFilters[i].frequency.setTargetAtTime(1200 + proximity * 600, audioCtx.currentTime, 0.4);
     });
 }
 
