@@ -413,6 +413,7 @@ function mapToCanvas(point) {
 let lastPinchState = [false, false]; // Prevents rapid re-triggering
 let pointingArmed = [true, true];   // Ready to fire when true (rearms after gesture released)
 let ringArmed = [true, true];       // Same for fist gesture
+let twoFingerArmed = [true, true];  // Index + middle up = open heart page
 
 function detectGestures() {
     if (!currentHands.length) return;
@@ -477,6 +478,25 @@ function detectGestures() {
             createShockwave(mapToCanvas(hand[0]), '#25D366');
             triggerZap();
             window.open('https://www.whatsapp.com', '_blank');
+        }
+
+        // Two fingers gesture: index + middle up, ring + pinky + thumb curled
+        const twoIndex  = isFingerExtended(8, 5);
+        const twoMiddle = isFingerExtended(12, 9);
+        const twoRing   = !isFingerExtended(16, 13);
+        const twoPinky  = !isFingerExtended(20, 17);
+        const twoThumb  = getDist(hand[4], palmBase) < handSize * 1.8;
+
+        const isTwoFingers = twoIndex && twoMiddle && twoRing && twoPinky && twoThumb;
+
+        if (!isTwoFingers) {
+            twoFingerArmed[idx] = true;
+        } else if (isTwoFingers && twoFingerArmed[idx]) {
+            twoFingerArmed[idx] = false;
+            uiGesture.innerText = "✌️ HEART PAGE!";
+            createShockwave(mapToCanvas(hand[8]), '#ff003c');
+            triggerZap();
+            window.open('heart.html', '_blank');
         }
 
 
