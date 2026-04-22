@@ -411,6 +411,8 @@ function mapToCanvas(point) {
 }
 
 let lastPinchState = [false, false]; // Prevents rapid re-triggering
+let lastClickState = [false, false]; // Prevents rapid re-triggering for click
+let lastClickTime = 0;              // Cooldown so it only fires once per gesture
 
 function detectGestures() {
     if (!currentHands.length) return;
@@ -433,6 +435,22 @@ function detectGestures() {
             uiGesture.innerText = "PINCH !";
         }
         lastPinchState[idx] = isPinching;
+
+        // Click Detection: index fingertip (8) curls close to index base (6)
+        // When the tip is lower than the middle joint it's a "click/tap" gesture
+        const indexTip = hand[8];
+        const indexMid = hand[6];
+        const isClicking = indexTip.y > indexMid.y + 0.04; // tip below mid joint
+
+        const now = performance.now();
+        if (isClicking && !lastClickState[idx] && (now - lastClickTime) > 1500) {
+            lastClickTime = now;
+            uiGesture.innerText = "CLICK!";
+            createShockwave(mapToCanvas(indexTip), '#00ffcc');
+            triggerZap();
+            window.open('https://www.google.com', '_blank');
+        }
+        lastClickState[idx] = isClicking;
     });
 
     // Spread Percentage roughly estimated by distance from Palm(0) to Index(8) and Pinky(20)
