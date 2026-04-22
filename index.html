@@ -412,9 +412,7 @@ function mapToCanvas(point) {
 
 let lastPinchState = [false, false]; // Prevents rapid re-triggering
 let pointingArmed = [true, true];   // Ready to fire when true (rearms after gesture released)
-let ringArmed = [true, true];       // Same for ring finger gesture
-let middleArmed = [true, true];     // Same for middle finger gesture
-let thumbArmed = [true, true];      // Same for thumb gesture
+let ringArmed = [true, true];       // Same for fist gesture
 
 function detectGestures() {
     if (!currentHands.length) return;
@@ -464,62 +462,24 @@ function detectGestures() {
             window.open('https://chat.openai.com', '_blank');
         }
 
-        // Ring finger gesture: only ring finger extended, all others curled
-        const ringExtended   = isFingerExtended(16, 13);
-        const indexCurled2   = !isFingerExtended(8, 5);
-        const middleCurled2  = !isFingerExtended(12, 9);
-        const pinkyCurled2   = !isFingerExtended(20, 17);
-        const thumbCurled2   = getDist(hand[4], palmBase) < handSize * 1.8;
+        // Fist gesture: all fingers curled
+        const isFist = !isFingerExtended(8, 5) &&
+                       !isFingerExtended(12, 9) &&
+                       !isFingerExtended(16, 13) &&
+                       !isFingerExtended(20, 17) &&
+                       getDist(hand[4], palmBase) < handSize * 1.8;
 
-        const isRingPoint = ringExtended && indexCurled2 && middleCurled2 && pinkyCurled2 && thumbCurled2;
-
-        if (!isRingPoint) {
+        if (!isFist) {
             ringArmed[idx] = true;
-        } else if (isRingPoint && ringArmed[idx]) {
+        } else if (isFist && ringArmed[idx]) {
             ringArmed[idx] = false;
-            uiGesture.innerText = "RING!";
-            createShockwave(mapToCanvas(hand[16]), '#25D366');
+            uiGesture.innerText = "FIST!";
+            createShockwave(mapToCanvas(hand[0]), '#25D366');
             triggerZap();
             window.open('https://www.whatsapp.com', '_blank');
         }
 
-        // Middle finger gesture: only middle finger extended, all others curled
-        const middleExtended  = isFingerExtended(12, 9);
-        const indexCurled3    = !isFingerExtended(8, 5);
-        const ringCurled3     = !isFingerExtended(16, 13);
-        const pinkyCurled3    = !isFingerExtended(20, 17);
-        const thumbCurled3    = getDist(hand[4], palmBase) < handSize * 1.8;
 
-        const isMiddlePoint = middleExtended && indexCurled3 && ringCurled3 && pinkyCurled3 && thumbCurled3;
-
-        if (!isMiddlePoint) {
-            middleArmed[idx] = true;
-        } else if (isMiddlePoint && middleArmed[idx]) {
-            middleArmed[idx] = false;
-            uiGesture.innerText = "MIDDLE!";
-            createShockwave(mapToCanvas(hand[12]), '#E1306C');
-            triggerZap();
-            window.open('https://www.instagram.com', '_blank');
-        }
-
-        // Thumb gesture: only thumb extended, all other fingers curled
-        const thumbExtended  = getDist(hand[4], palmBase) > handSize * 2.2;
-        const indexCurled4   = !isFingerExtended(8, 5);
-        const middleCurled4  = !isFingerExtended(12, 9);
-        const ringCurled4    = !isFingerExtended(16, 13);
-        const pinkyCurled4   = !isFingerExtended(20, 17);
-
-        const isThumbUp = thumbExtended && indexCurled4 && middleCurled4 && ringCurled4 && pinkyCurled4;
-
-        if (!isThumbUp) {
-            thumbArmed[idx] = true;
-        } else if (isThumbUp && thumbArmed[idx]) {
-            thumbArmed[idx] = false;
-            uiGesture.innerText = "THUMB!";
-            createShockwave(mapToCanvas(hand[4]), '#4285F4');
-            triggerZap();
-            window.open('https://www.google.com', '_blank');
-        }
     });
 
     // Spread Percentage roughly estimated by distance from Palm(0) to Index(8) and Pinky(20)
